@@ -1,89 +1,74 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
-import io
 import openai
 import os
 
-# Load key from environment variable
-openai.api_key = os.getenv("OPENROUTER_API_KEY")
-
-# Use OpenRouter instead of OpenAI
+# -----------------------------
+# Load OpenRouter API key from Streamlit secrets
+# Make sure you added it as OPENROUTER_API_KEY in Streamlit Cloud secrets
+openai.api_key = st.secrets["OPENROUTER_API_KEY"]
 openai.api_base = "https://openrouter.ai/api/v1"
+# -----------------------------
 
-# Example request
-response = openai.ChatCompletion.create(
-    model="openai/gpt-4o-mini",  # You can also try "anthropic/claude-3.5-sonnet"
-    messages=[
-        {"role": "system", "content": "You are a helpful sales assistant."},
-        {"role": "user", "content": "Give me strategies to improve online sales conversions."}
-    ]
-)
+st.set_page_config(page_title="Sales Assistant", layout="wide")
+st.title("📊 AI Sales Assistant")
 
-print(response["choices"][0]["message"]["content"])
-
-st.set_page_config(page_title="AI Business Insights", layout="wide")
-st.title("📊 AI-Powered Business Insights Assistant")
-
-st.write("Upload your business data (CSV/Excel), and get instant insights + visualizations with AI.")
-
-uploaded_file = st.file_uploader("Upload CSV or Excel file", type=["csv", "xlsx"])
-
+# Upload CSV
+uploaded_file = st.file_uploader("Upload your sales CSV", type=["csv", "xlsx"])
 if uploaded_file:
-    # Read the uploaded file
-    if uploaded_file.name.endswith("csv"):
-        df = pd.read_csv(uploaded_file)
-    else:
-        df = pd.read_excel(uploaded_file)
+    try:
+        if uploaded_file.name.endswith(".csv"):
+            df = pd.read_csv(uploaded_file)
+        else:
+            df = pd.read_excel(uploaded_file)
 
-    st.subheader("📂 Preview of Data")
-    st.dataframe(df.head())
+        st.subheader("Data Preview")
+        st.dataframe(df.head())
 
-    # Basic Visualization
-    st.subheader("📈 Quick Visualization")
-    numeric_cols = df.select_dtypes(include=['float64', 'int64']).columns.tolist()
-    if len(numeric_cols) >= 2:
-        x_axis = st.selectbox("Select X-axis", options=numeric_cols)
-        y_axis = st.selectbox("Select Y-axis", options=numeric_cols)
+        st.subheader("Basic Visualizations")
+        numeric_cols = df.select_dtypes(include=["float", "int"]).columns.tolist()
+        if numeric_cols:
+            col = st.selectbox("Select column for histogram", numeric_cols)
+            plt.figure(figsize=(8,4))
+            plt.hist(df[col], bins=20, color="skyblue", edgecolor="black")
+            plt.xlabel(col)
+            plt.ylabel("Count")
+            plt.title(f"Histogram of {col}")
+            st.pyplot(plt)
+        else:
+            st.write("No numeric columns to visualize.")
 
-        fig, ax = plt.subplots()
-        ax.plot(df[x_axis], df[y_axis], marker='o')
-        ax.set_xlabel(x_axis)
-        ax.set_ylabel(y_axis)
-        ax.set_title(f"{y_axis} vs {x_axis}")
-        st.pyplot(fig)
+        # Ask AI
+        st.subheader("Ask AI about your sales data")
+        user_question = st.text_input("Type your question here:")
 
-    # Generate AI insights
-    st.subheader("🤖 AI Insights")
-    prompt = f"Analyze this business data and give key insights in simple language. Data sample:\n{df.head(20).to_string()}"
+        if user_question:
+            # Convert DataFrame to CSV string for AI context
+            data_str = df.head(100).to_csv(index=False)  # limit rows for performance
 
-    if st.button("Generate Insights with AI"):
-        with st.spinner("Analyzing data with OpenAI..."):
-            response = openai.ChatCompletion.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": "You are a business analyst who explains data in simple terms."},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=300
-            )
-            insights = response["choices"][0]["message"]["content"]
-            st.success(insights)
+            prompt = f"""
+You are an AI sales analyst. Here is a sample of the sales data (CSV format):
+{data_str}
 
-    # Interactive Q&A
-    st.subheader("💬 Ask Questions About Your Data")
-    user_question = st.text_input("Ask a question (e.g., Which month had the highest sales?)")
+Answer the following question based on this data:
+{user_question}
+"""
 
-    if user_question:
-        q_prompt = f"Here is some business data:\n{df.head(20).to_string()}\nNow answer this question: {user_question}"
-        with st.spinner("Thinking..."):
-            response = openai.ChatCompletion.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": "You are a helpful AI business data analyst."},
-                    {"role": "user", "content": q_prompt}
-                ],
-                max_tokens=250
-            )
-            answer = response["choices"][0]["message"]["content"]
-            st.info(answer)
+            with st.spinner("Analyzing with AI..."):
+                response = openai.chat.completions.create(
+                    model="openai/gpt-4o-mini",
+                    messages=[
+                        {"role": "system", "content": "You are a helpful sales analyst."},
+                        {"role": "user", "content": prompt}
+                    ]
+                )
+
+                answer = response.choices[0].message.content
+                st.subheader("AI Response")
+                st.write(answer)
+
+    except Exception as e:
+        st.error(f"Error reading file: {e}")
+else:
+    st.info("Please upload a CSV or Excel file to get started.")
