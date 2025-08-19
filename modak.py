@@ -10,66 +10,48 @@ openai.api_key = st.secrets["OPENROUTER_API_KEY"]
 openai.api_base = "https://openrouter.ai/api/v1"
 # -----------------------------
 
-st.set_page_config(page_title="Sales Assistant", layout="wide")
-st.title("📊 AI Sales Assistant (Streamlit Cloud)")
+st.set_page_config(page_title="Sales Assistant Test", layout="wide")
+st.title("🧪 Sales Assistant Test (Streamlit Cloud)")
 
-# Upload CSV/Excel
-uploaded_file = st.file_uploader("Upload your sales CSV/Excel file", type=["csv", "xlsx"])
+# Test: API key length
+st.write("API key length (should be >0):", len(st.secrets["OPENROUTER_API_KEY"]))
 
-if uploaded_file:
-    try:
-        # Read file
-        if uploaded_file.name.endswith(".csv"):
-            df = pd.read_csv(uploaded_file)
-        else:
-            df = pd.read_excel(uploaded_file)
+# Use a tiny built-in sample CSV
+sample_data = {
+    "Product": ["A", "B", "C"],
+    "Sales": [100, 150, 200],
+    "Month": ["July", "July", "July"]
+}
+df = pd.DataFrame(sample_data)
+st.subheader("Sample Data Preview")
+st.dataframe(df)
 
-        st.subheader("Data Preview")
-        st.dataframe(df.head())
+# Simple histogram for testing
+plt.figure(figsize=(5,3))
+plt.bar(df["Product"], df["Sales"], color="skyblue")
+plt.title("Sales per Product")
+plt.ylabel("Sales")
+st.pyplot(plt)
 
-        # Automatic visualizations for numeric columns
-        numeric_cols = df.select_dtypes(include=["float", "int"]).columns.tolist()
-        if numeric_cols:
-            st.subheader("Histograms for numeric columns")
-            for col in numeric_cols:
-                st.write(f"Histogram of {col}")
-                plt.figure(figsize=(6,3))
-                plt.hist(df[col], bins=20, color="skyblue", edgecolor="black")
-                plt.xlabel(col)
-                plt.ylabel("Count")
-                st.pyplot(plt)
-        else:
-            st.write("No numeric columns to visualize.")
+# Test AI response
+st.subheader("Ask AI (test question)")
+user_question = st.text_input("Example: Which product sold the most?")
 
-        # AI insights
-        st.subheader("Ask AI about your sales data")
-        user_question = st.text_input("Type your question here:")
+if user_question:
+    prompt = f"""
+You are a helpful sales analyst. Here is sample sales data:
+{df.to_csv(index=False)}
 
-        if user_question:
-            # Send first 100 rows to AI
-            data_str = df.head(100).to_csv(index=False)
-            prompt = f"""
-You are a helpful sales analyst. Here is a sample of sales data in CSV:
-{data_str}
-
-Answer the following question based on this data:
-{user_question}
+Answer this question: {user_question}
 """
-
-            with st.spinner("Analyzing with AI (may take a few seconds)..."):
-                response = openai.chat.completions.create(
-                    model="openai/gpt-oss-20b:free",  # Free OpenRouter model
-                    messages=[
-                        {"role": "system", "content": "You are a helpful sales analyst."},
-                        {"role": "user", "content": prompt}
-                    ]
-                )
-                answer = response.choices[0].message.content
-                st.subheader("AI Response")
-                st.write(answer)
-
-    except Exception as e:
-        st.error(f"Error reading file: {e}")
-
-else:
-    st.info("Please upload a CSV or Excel file to get started.")
+    with st.spinner("Generating AI response..."):
+        response = openai.chat.completions.create(
+            model="openai/gpt-oss-20b:free",  # Free OpenRouter model
+            messages=[
+                {"role": "system", "content": "You are a helpful sales analyst."},
+                {"role": "user", "content": prompt}
+            ]
+        )
+        answer = response.choices[0].message.content
+        st.subheader("AI Response")
+        st.write(answer)
